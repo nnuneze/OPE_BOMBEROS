@@ -74,7 +74,11 @@
             <h2 style="text-align:center; font-weight:800; font-size:1.35rem; margin:.5rem 0 .25rem; color:#0f172a;">Test SPEIS</h2>
             <p style="text-align:center; color:#64748b; font-size:.9rem; margin:0 0 1.25rem;">Introduce tu código de activación para empezar.</p>
 
-            <input id="gate-code" type="text" inputmode="text" autocomplete="off" placeholder="SPEIS-XXXXXX"
+            <input id="gate-nick" type="text" autocomplete="off" placeholder="Tu apodo (para la clasificación)"
+                style="width:100%; text-align:center; font-weight:600; font-size:1rem;
+                       padding:.75rem; border:2px solid #e2e8f0; border-radius:.75rem; outline:none; margin-bottom:.6rem;">
+
+            <input id="gate-code" type="text" inputmode="text" autocomplete="off" placeholder="OPO-XXXXXX"
                 style="width:100%; text-align:center; letter-spacing:2px; text-transform:uppercase; font-weight:700; font-size:1.1rem;
                        padding:.85rem; border:2px solid #e2e8f0; border-radius:.75rem; outline:none;">
 
@@ -112,10 +116,22 @@
         </button>
     </div>
 
+    <!-- ===== VENTANA DE CLASIFICACION ===== -->
+    <div id="ranking-modal" style="position:fixed; inset:0; z-index:90; display:none; align-items:center; justify-content:center; padding:1rem; background:rgba(15,23,42,.55);">
+        <div style="width:100%; max-width:480px; max-height:85vh; overflow-y:auto; background:#fff; border-radius:1rem; padding:1.25rem; box-shadow:0 20px 50px rgba(0,0,0,.3);">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:.5rem;">
+                <h3 style="font-weight:800; font-size:1.15rem; color:#0f172a; margin:0;">🏆 Clasificación</h3>
+                <button onclick="cerrarRanking()" style="border:0; background:#f1f5f9; border-radius:.5rem; width:2rem; height:2rem; cursor:pointer; font-weight:700; color:#475569;">✕</button>
+            </div>
+            <p id="ranking-sub" style="color:#64748b; font-size:.85rem; margin:0 0 .75rem;"></p>
+            <div id="ranking-list"></div>
+        </div>
+    </div>
+
     <header class="bg-gradient-to-r from-red-600 to-amber-600 text-white shadow-md p-4 sticky top-0 z-50">
         <div class="max-w-6xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-2">
             <h1 class="text-xl font-bold tracking-wide flex items-center gap-2">
-                🚒 <span>Panel de Control de Test - SPEIS</span>
+                🚒 <span id="op-nombre">Test Oposiciones</span>
             </h1>
             <div class="flex items-center gap-4 text-xs sm:text-sm bg-black/20 px-3 py-1.5 rounded-lg">
                 <div>Respondidas: <span id="global-progress" class="font-bold">0</span></div>
@@ -131,7 +147,10 @@
         <section id="stats-panel" class="bg-white rounded-xl shadow-sm p-5 border border-slate-200 space-y-4">
             <div class="flex items-center justify-between flex-wrap gap-2">
                 <h2 class="text-base font-bold text-slate-700 flex items-center gap-2">📊 <span>Tu progreso</span></h2>
-                <span id="progress-label" class="text-sm font-semibold text-slate-500">0 / 0 respondidas (0%)</span>
+                <div class="flex items-center gap-3">
+                    <button id="btn-ranking" onclick="verRanking()" class="text-sm font-bold text-white bg-gradient-to-r from-amber-500 to-red-600 px-3 py-1.5 rounded-lg shadow hover:brightness-110 cursor-pointer">🏆 Clasificación</button>
+                    <span id="progress-label" class="text-sm font-semibold text-slate-500">0 / 0 respondidas (0%)</span>
+                </div>
             </div>
             <div class="w-full h-4 bg-slate-100 rounded-full overflow-hidden">
                 <div id="progress-bar" class="h-full bg-gradient-to-r from-red-600 to-amber-500 rounded-full transition-all duration-500" style="width:0%"></div>
@@ -251,12 +270,31 @@
         // BANCO COMPLETO DE PREGUNTAS EXTRAÍDO DIRECTAMENTE DEL DOCUMENTO PDF
         let bancoPreguntas = []; // Se rellena tras activar con un codigo valido
 
-        // VARIABLES LOGÍSTICAS DE PERSISTENCIA
-        let fallosIds = JSON.parse(localStorage.getItem('bomber_fallos_ids')) || [];
-        let respondidasIds = JSON.parse(localStorage.getItem('bomber_respondidas_ids')) || [];
+        // ESTADO DE LA OPOSICION ACTIVA
+        let OP = null;          // id de la oposicion activa (o 'demo')
+        let OP_NOMBRE = '';     // nombre legible
+        let apodo = localStorage.getItem('speis_apodo') || '';
+
+        // PROGRESO (se carga por oposicion)
+        let fallosIds = [];
+        let respondidasIds = [];
         let testActualPreguntas = [];
         let respuestasUsuario = {};
-        let ordenConsecutivoIndices = JSON.parse(localStorage.getItem('bomber_orden_indices')) || {};
+
+        function keyResp() { return 'prog_resp_' + OP; }
+        function keyFallos() { return 'prog_fallos_' + OP; }
+        function cargarProgreso() {
+            fallosIds = JSON.parse(localStorage.getItem(keyFallos())) || [];
+            respondidasIds = JSON.parse(localStorage.getItem(keyResp())) || [];
+        }
+        function guardarProgreso() {
+            localStorage.setItem(keyFallos(), JSON.stringify(fallosIds));
+            localStorage.setItem(keyResp(), JSON.stringify(respondidasIds));
+        }
+        function fijarNombreOposicion() {
+            const el = document.getElementById('op-nombre');
+            if (el) el.textContent = OP_NOMBRE || 'Test Oposiciones';
+        }
 
         // El arranque real ocurre SOLO despues de activar con un codigo valido
         function iniciarApp() {
@@ -269,7 +307,7 @@
            ============================================================ */
 
         // 1) PEGA AQUI la URL que te da Google al publicar el Apps Script
-        const SERVIDOR_URL = "https://script.google.com/macros/s/AKfycbysA1q3WBvxun9oT2KcZY2R0I2FlMGJ2igeFaTlTzvrEbZ8c1WjugWaT4iAQGBx-IXb8A/exec";
+        const SERVIDOR_URL = "https://script.google.com/macros/s/AKfycbz26YANantWybBLdbONhkTc8SS8cAH8cM6c6Wqi9unZq7jaJoDclxBpwUq8KoD90adiaA/exec";
 
         // 10 preguntas FIJAS de la demo (van dentro de la app, sin servidor)
         const PREGUNTAS_DEMO = [{"id":1,"tema":"Tema 16: DL 1/2017","pregunta":"SEGÚN EL DECRETO LEGISLATIVO 1/2017 DE LA LEY DE GESTIÓN DE EMERGENCIAS EN SU ARTÍCULO 2, ¿CUÁLES SON LOS PRINCIPIOS A LOS QUE SE SOMETEN LAS RELACIONES DE LAS ADMINISTRACIONES PÚBLICAS VASCAS EN LA GESTIÓN DE EMERGENCIAS?","opciones":{"a":"Coordinación, colaboración e independencia","b":"Coordinación, colaboración, solidaridad y lealtad institucional","c":"Jerarquía estricta, opacidad y mando único","d":"Subordinación, solidaridad y lealtad institucional"},"correcta":"b"},{"id":8,"tema":"Tema 17: Ley 12/2023 SPEIS","pregunta":"SEGÚN LA LEY 12/2023 DE LOS SERVICIOS DE PREVENCIÓN Y EXTINCIÓN DE INCENDIOS Y SALVAMENTO, EL PERSONAL FUNCIONARIO DE LOS SERVICIOS TENDRÁ LA CONSIDERACIÓN DE AGENTE DE LA AUTORIDAD:","opciones":{"a":"Cuando esté de servicio o cuando, estando libre de servicio, intervenga en cualquier tipo de siniestro o situación de riesgo inminente, siempre que acredite previamente su condición","b":"Cuando esté de servicio o cuando, estando libre de servicio, intervenga en cualquier tipo de siniestro o situación de riesgo inminente, sin que tenga que acreditar previamente su condición","c":"Nunca pueden ser considerados agentes de la autoridad","d":"Cuando esté exclusivamente de servicio e intervenga en cualquier tipo de siniestro, sin necesidad de acreditarlo"},"correcta":"a"},{"id":16,"tema":"Tema 18: Decreto 153/1997 LABI","pregunta":"SEGÚN EL DECRETO 153/1997 POR EL QUE SE APRUEBA EL PLAN DE PROTECCIÓN CIVIL DE EUSKADI (LABI), LOS RIESGOS PROVOCADOS O DERIVADOS DE LAS ACCIONES O ACTIVIDADES HUMANAS SON UN RIESGO DE TIPO:","opciones":{"a":"Antrópico","b":"Tecnológico","c":"Natural","d":"Ambiental"},"correcta":"a"},{"id":24,"tema":"Tema 19: DF 90/2022 Bizkaia","pregunta":"SEGÚN EL DECRETO FORAL DE BIZKAIA 90/2022 REGULADOR DEL PLAN FORAL DE EMERGENCIAS, EL RIESGO SE EVALÚA A PARTIR DE LOS PARÁMETRES DE:","opciones":{"a":"Únicamente ocurrencia","b":"Ocurrencia y probabilidad","c":"Probabilidad y severidad","d":"Ninguna de las anteriores es correcta"},"correcta":"c"},{"id":33,"tema":"Tema 20: D 277/2010 Autoprotección","pregunta":"SEGÚN EL DECRETO 277/2010, REMITIR AL REGISTRO GENERAL DE PLANES DE AUTOPROTECCIÓN DE EUSKADI LOS DATOS PREVISTOS Y MANTENERLOS ACTUALIZADOS ES UNA OBLIGACIÓN DE:","opciones":{"a":"Administración General de la Comunidad Autónoma de Euskadi competente en materia de atención de emergencias","b":"Persona titular de la actividad","c":"La Comisión de Protección Civil de Euskadi","d":"Ministerio de Industria y Turismo"},"correcta":"b"},{"id":41,"tema":"Tema 21: Ley 31/1995 LPRL","pregunta":"SEGÚN LA LEY 31/1995 DE PREVENCIÓN DE RIESGOS LABORALES, CUALQUIER EQUIPO DESTINADO A SER LLEVADO O SUJETADO POR EL TRABAJADOR PARA QUE LE PROTEJA SE ENTENDERÁ POR:","opciones":{"a":"Equipo de Trabajo","b":"Equipo de Protección Individual","c":"Equipo de Prevención","d":"Equipo de Respiración Autónomo"},"correcta":"b"},{"id":50,"tema":"Tema 22: RD 513/2017 RIPCI","pregunta":"SEGÚN EL REAL DECRETO 513/2017 (RIPCI), LA INSTALACIÓN DE LOS EQUIPOS REQUERIRÁ LA PRESENTACIÓN DE UN PROYECTO O DOCUMENTACIÓN TÉCNICA ANTE LOS SERVICIOS EN MATERIA DE:","opciones":{"a":"Salud del Gobierno Vasco","b":"Seguridad del Gobierno Vasco","c":"Industria de la Comunidad Autónoma","d":"Protección Civil"},"correcta":"c"},{"id":58,"tema":"Tema 23: CTE SI","pregunta":"SEGÚN LA TABLA 1.1 DE LA SECCIÓN SI4, ¿CUÁNDO ES OBLIGATORIA LA INSTALACIÓN DE UN SISTEMA DE BIE EN UN USO ADMINISTRATIVO?","opciones":{"a":"En todo caso, independientemente de la superficie del edificio","b":"Cuando la altura de evacuación sea superior a 28 m","c":"Cuando la superficie construida sea mayor de 2.000 m2","d":"Cuando el edificio disponga de más de dos plantas sobre rasante"},"correcta":"c"},{"id":69,"tema":"Tema 24: RD 164/2025 RSCIEI","pregunta":"SEGÚN EL REAL DECRETO 164/2025 POR EL QUE SE APRUEBA EL REGLAMENTO DE SEGURIDAD CONTRA INCENDIOS EN LOS ESTABLECIMIENTOS INDUSTRIALES, ¿A CUÁL DE LAS SIGUIENTES ACTIVIDADES SE APLICA ESTE REGLAMENTO?","opciones":{"a":"Las actividades agrarias y de ganadería","b":"Los talleres de reparación de vehículos","c":"Las de extracción de minerales","d":"Las instalaciones para usos militares"},"correcta":"b"},{"id":78,"tema":"Tema 25/26: Tácticas","pregunta":"SEGÚN LAS TÁCTICAS OPERATIVAS DEL SISTEMA VASCO DE ATENCIÓN DE EMERGENCIAS, LA COMUNICACIÓN DE LA DESAPARICIÓN DE UNA PERSONA CUYA UBICACIÓN ES DESCONOCIDA ES LA TÁCTICA OPERATIVA:","opciones":{"a":"TG3","b":"SG1","c":"M0","d":"Lurra"},"correcta":"c"}];
@@ -284,13 +322,21 @@
             return id;
         }
 
-        // Arranque: si ya esta activado, carga las preguntas guardadas; si no, pide codigo
+        // Arranque: si ya esta activado, carga su oposicion guardada; si no, pide codigo
         function arrancarSistema() {
+            const nickInput = document.getElementById('gate-nick');
+            if (nickInput && apodo) nickInput.value = apodo;
+
             const guardadas = localStorage.getItem('speis_preguntas');
             const activado = localStorage.getItem('speis_activado');
-            if (activado === 'si' && guardadas) {
+            const opGuardada = localStorage.getItem('speis_oposicion');
+            if (activado === 'si' && guardadas && opGuardada) {
                 try {
+                    OP = opGuardada;
+                    OP_NOMBRE = localStorage.getItem('speis_oposicion_nombre') || '';
                     bancoPreguntas = JSON.parse(guardadas);
+                    cargarProgreso();
+                    fijarNombreOposicion();
                     document.getElementById('gate').style.display = 'none';
                     iniciarApp();
                     return;
@@ -302,11 +348,14 @@
         // Pulsar "Activar"
         async function activar() {
             const input = document.getElementById('gate-code');
+            const nickInput = document.getElementById('gate-nick');
             const btn = document.getElementById('gate-btn');
             const msg = document.getElementById('gate-msg');
             const codigo = (input.value || '').trim().toUpperCase();
+            const nick = (nickInput.value || '').trim();
 
             if (!codigo) { msg.textContent = 'Escribe tu código.'; return; }
+            if (!nick) { msg.textContent = 'Escribe un apodo para la clasificación.'; return; }
             if (SERVIDOR_URL.indexOf('http') !== 0) {
                 msg.textContent = 'La app aún no tiene configurado el servidor.';
                 return;
@@ -315,18 +364,25 @@
             btn.disabled = true; btn.textContent = 'Comprobando...'; msg.textContent = '';
 
             try {
-                const url = SERVIDOR_URL + '?codigo=' + encodeURIComponent(codigo)
+                const url = SERVIDOR_URL + '?action=activar&codigo=' + encodeURIComponent(codigo)
                           + '&device=' + encodeURIComponent(getDeviceId())
                           + '&t=' + Date.now();
                 const resp = await fetch(url);
                 const data = await resp.json();
 
                 if (data.ok && Array.isArray(data.preguntas)) {
+                    OP = data.oposicion;
+                    OP_NOMBRE = data.nombre || data.oposicion;
+                    apodo = nick;
                     bancoPreguntas = data.preguntas;
-                    // Guardamos para que funcione sin conexion a partir de ahora
                     localStorage.setItem('speis_preguntas', JSON.stringify(data.preguntas));
                     localStorage.setItem('speis_activado', 'si');
                     localStorage.setItem('speis_codigo', codigo);
+                    localStorage.setItem('speis_oposicion', OP);
+                    localStorage.setItem('speis_oposicion_nombre', OP_NOMBRE);
+                    localStorage.setItem('speis_apodo', apodo);
+                    cargarProgreso();
+                    fijarNombreOposicion();
                     document.getElementById('gate').style.display = 'none';
                     iniciarApp();
                 } else {
@@ -341,12 +397,17 @@
             }
         }
 
-        // Pulsar "Probar demo": carga las 10 preguntas fijas que van dentro de la app
+        // Pulsar "Probar demo": 10 preguntas fijas locales
         function probarDemo() {
+            OP = 'demo';
+            OP_NOMBRE = 'Demostración';
             bancoPreguntas = PREGUNTAS_DEMO.slice();
-            // La demo NO se guarda como activación: al reabrir vuelve a pedir código
+            cargarProgreso();
+            fijarNombreOposicion();
             document.getElementById('gate').style.display = 'none';
             document.getElementById('demo-banner').style.display = 'block';
+            const br = document.getElementById('btn-ranking');
+            if (br) br.style.display = 'none'; // sin ranking en demo
             iniciarApp();
         }
 
@@ -355,6 +416,8 @@
             document.getElementById('demo-banner').style.display = 'none';
             const btn = document.getElementById('gate-demo');
             btn.disabled = false; btn.textContent = 'Probar demo (10 preguntas)';
+            const br = document.getElementById('btn-ranking');
+            if (br) br.style.display = '';
             document.getElementById('gate').style.display = 'flex';
         }
 
@@ -588,9 +651,9 @@
                 }
             });
 
-            localStorage.setItem('bomber_fallos_ids', JSON.stringify(fallosIds));
-            localStorage.setItem('bomber_respondidas_ids', JSON.stringify(respondidasIds));
+            guardarProgreso();
             updateGlobalCounters();
+            enviarPuntuacion();
 
             document.getElementById('btn-submit-test').classList.add('hidden');
             document.getElementById('btn-submit-test-bottom').classList.add('hidden');
@@ -612,17 +675,78 @@
         }
 
         function resetStats() {
-            if(confirm("⚠️ ¿Quieres borrar por completo las estadísticas, el banco de fallos y el progreso actual?")) {
-                localStorage.removeItem('bomber_fallos_ids');
-                localStorage.removeItem('bomber_respondidas_ids');
-                localStorage.removeItem('bomber_orden_indices');
+            if(confirm("⚠️ ¿Quieres borrar por completo las estadísticas, el banco de fallos y el progreso de esta oposición?")) {
+                localStorage.removeItem(keyFallos());
+                localStorage.removeItem(keyResp());
                 fallosIds = [];
                 respondidasIds = [];
-                ordenConsecutivoIndices = {};
                 updateGlobalCounters();
-                renderSyllabusBlocks();
+                enviarPuntuacion();
                 alert("Historial limpio.");
             }
+        }
+
+        // ===== COMPETICION: enviar puntuacion y ver clasificacion =====
+        function enviarPuntuacion() {
+            if (!OP || OP === 'demo' || !apodo) return;       // la demo no compite
+            const total = respondidasIds.length;
+            if (total === 0) return;
+            const aciertos = respondidasIds.filter(id => !fallosIds.includes(id)).length;
+            const notaG = (aciertos / total * 10).toFixed(2);
+            const url = SERVIDOR_URL + '?action=puntuacion'
+                + '&oposicion=' + encodeURIComponent(OP)
+                + '&nick=' + encodeURIComponent(apodo)
+                + '&nota=' + notaG
+                + '&respondidas=' + total
+                + '&device=' + encodeURIComponent(getDeviceId())
+                + '&t=' + Date.now();
+            fetch(url).catch(() => {});  // silencioso: si falla, no molesta al usuario
+        }
+
+        async function verRanking() {
+            if (!OP || OP === 'demo') {
+                alert("Activa la app con un código para competir en la clasificación.");
+                return;
+            }
+            const modal = document.getElementById('ranking-modal');
+            const lista = document.getElementById('ranking-list');
+            const sub = document.getElementById('ranking-sub');
+            modal.style.display = 'flex';
+            sub.textContent = OP_NOMBRE;
+            lista.innerHTML = '<p style="text-align:center;color:#64748b;padding:1rem;">Cargando…</p>';
+            try {
+                const resp = await fetch(SERVIDOR_URL + '?action=ranking&oposicion=' + encodeURIComponent(OP) + '&t=' + Date.now());
+                const data = await resp.json();
+                if (!data.ok || !Array.isArray(data.ranking) || data.ranking.length === 0) {
+                    lista.innerHTML = `<p style="text-align:center;color:#64748b;padding:1rem;">Aún no hay nadie clasificado.<br><span style="font-size:.8rem;">(hay que responder al menos ${data.min || 40} preguntas para aparecer)</span></p>`;
+                    return;
+                }
+                const miDevice = getDeviceId();
+                let html = '';
+                data.ranking.forEach((r, i) => {
+                    const yo = (r.device === miDevice);
+                    const medalla = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1) + '.';
+                    html += `
+                        <div style="display:flex; align-items:center; gap:.6rem; padding:.6rem .5rem; border-radius:.6rem; margin-bottom:.3rem;
+                                    background:${yo ? '#fef3c7' : '#f8fafc'}; border:1px solid ${yo ? '#f59e0b' : '#eef2f7'};">
+                            <span style="width:2rem; text-align:center; font-weight:800; color:#475569;">${medalla}</span>
+                            <span style="flex:1; font-weight:700; color:#0f172a;">${escapeHtml(r.nick) || 'Anónimo'}${yo ? ' (tú)' : ''}</span>
+                            <span style="font-weight:800; color:#16a34a;">${(r.nota).toFixed(1)}</span>
+                            <span style="font-size:.75rem; color:#94a3b8; width:3.5rem; text-align:right;">${r.respondidas} pr.</span>
+                        </div>`;
+                });
+                lista.innerHTML = html;
+            } catch (e) {
+                lista.innerHTML = '<p style="text-align:center;color:#dc2626;padding:1rem;">No se pudo cargar la clasificación.</p>';
+            }
+        }
+
+        function cerrarRanking() {
+            document.getElementById('ranking-modal').style.display = 'none';
+        }
+
+        function escapeHtml(s) {
+            return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
         }
     </script>
 
