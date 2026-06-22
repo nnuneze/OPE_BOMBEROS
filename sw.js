@@ -1,6 +1,6 @@
 // Service Worker - Test SPEIS
 // Cambia el numero de version (v1, v2...) cada vez que actualices la app
-const CACHE = 'speis-test-v8';
+const CACHE = 'speis-test-v11';
 
 // Archivos locales que SIEMPRE se guardan al instalar
 const APP_SHELL = [

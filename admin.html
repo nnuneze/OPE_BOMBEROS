@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Administración · Test Oposiciones</title>
+    <meta name="theme-color" content="#0f172a">
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style>
+        html { font-size: 17px; }
+        body { overflow-x: hidden; }
+        .card { background:#fff; border:1px solid #e2e8f0; border-radius:1rem; padding:1.25rem; }
+        textarea, input, select { outline:none; }
+        textarea:focus, input:focus, select:focus { border-color:#dc2626; }
+    </style>
+</head>
+<body class="bg-slate-100 min-h-screen text-slate-800">
+
+    <header class="bg-slate-900 text-white p-4 sticky top-0 z-40">
+        <div class="max-w-4xl mx-auto flex items-center justify-between gap-2">
+            <h1 class="font-bold tracking-wide flex items-center gap-2">🔧 <span>Administración · Test Oposiciones</span></h1>
+            <button id="logout-btn" onclick="logout()" class="hidden text-sm bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded-lg">Salir</button>
+        </div>
+    </header>
+
+    <main class="max-w-4xl mx-auto p-4 sm:p-6 space-y-6">
+
+        <!-- LOGIN -->
+        <section id="login-section" class="card max-w-md mx-auto mt-6 space-y-3">
+            <h2 class="text-lg font-bold">Acceso de administrador</h2>
+            <p class="text-sm text-slate-500">Introduce la contraseña de administración para gestionar oposiciones, preguntas y códigos.</p>
+            <input id="pass-input" type="password" placeholder="Contraseña" class="w-full p-3 border-2 border-slate-200 rounded-xl">
+            <button onclick="login()" class="w-full p-3 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800">Entrar</button>
+            <p id="login-msg" class="text-sm text-red-600 min-h-[1.2rem]"></p>
+        </section>
+
+        <!-- PANEL -->
+        <div id="panel" class="hidden space-y-6">
+
+            <!-- RESUMEN -->
+            <section class="card space-y-3">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-lg font-bold">📚 Oposiciones</h2>
+                    <button onclick="cargarEstado()" class="text-sm text-blue-600 hover:underline">↻ Actualizar</button>
+                </div>
+                <div id="ops-table" class="text-sm"></div>
+            </section>
+
+            <!-- CREAR OPOSICION -->
+            <section class="card space-y-3">
+                <h2 class="text-lg font-bold">➕ Crear oposición</h2>
+                <div class="grid sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-xs font-semibold text-slate-500">Nombre visible</label>
+                        <input id="new-op-nombre" oninput="sugerirId()" placeholder="Ej: Bomberos Madrid 2026" class="w-full p-2.5 border-2 border-slate-200 rounded-lg">
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-slate-500">Identificador (sin espacios)</label>
+                        <input id="new-op-id" placeholder="bomberos-madrid-2026" class="w-full p-2.5 border-2 border-slate-200 rounded-lg font-mono text-sm">
+                    </div>
+                </div>
+                <button onclick="crearOposicion()" class="px-4 py-2.5 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700">Crear oposición</button>
+                <p id="crear-msg" class="text-sm min-h-[1.2rem]"></p>
+            </section>
+
+            <!-- SUBIR PREGUNTAS -->
+            <section class="card space-y-3">
+                <h2 class="text-lg font-bold">📝 Subir preguntas</h2>
+                <div>
+                    <label class="text-xs font-semibold text-slate-500">Oposición destino</label>
+                    <select id="up-op" class="w-full p-2.5 border-2 border-slate-200 rounded-lg"></select>
+                </div>
+                <details class="bg-slate-50 rounded-lg p-3 text-sm">
+                    <summary class="cursor-pointer font-semibold text-slate-600">¿Qué formato debo pegar?</summary>
+                    <pre class="mt-2 whitespace-pre-wrap text-xs text-slate-600">TEMA: Tema 1 - Constitución
+¿Cuál es la capital de España?
+*Madrid
+Barcelona
+Sevilla
+Valencia
+
+¿En qué año se aprobó la Constitución?
+1976
+*1978
+1980
+1982</pre>
+                    <p class="mt-2 text-xs text-slate-500">La línea <b>TEMA:</b> es opcional y se aplica a las preguntas siguientes hasta que pongas otra. La respuesta correcta se marca con un <b>*</b> delante. Deja una línea en blanco entre preguntas. (Si me pasas el material a mí, te lo devuelvo ya en este formato.)</p>
+                </details>
+                <textarea id="up-text" rows="10" placeholder="Pega aquí las preguntas en el formato de arriba…" class="w-full p-3 border-2 border-slate-200 rounded-lg font-mono text-sm"></textarea>
+                <div class="flex flex-wrap gap-2 items-center">
+                    <button onclick="previsualizar()" class="px-4 py-2.5 bg-slate-200 text-slate-800 font-bold rounded-lg hover:bg-slate-300">Previsualizar</button>
+                    <button onclick="subirPreguntas()" class="px-4 py-2.5 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700">Subir preguntas</button>
+                    <span id="up-msg" class="text-sm"></span>
+                </div>
+                <div id="up-preview" class="text-sm"></div>
+            </section>
+
+            <!-- GENERAR CODIGOS -->
+            <section class="card space-y-3">
+                <h2 class="text-lg font-bold">🔑 Generar códigos</h2>
+                <div class="grid sm:grid-cols-3 gap-3 items-end">
+                    <div class="sm:col-span-2">
+                        <label class="text-xs font-semibold text-slate-500">Oposición</label>
+                        <select id="cod-op" class="w-full p-2.5 border-2 border-slate-200 rounded-lg"></select>
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-slate-500">Cantidad</label>
+                        <input id="cod-num" type="number" value="50" min="1" max="500" class="w-full p-2.5 border-2 border-slate-200 rounded-lg">
+                    </div>
+                </div>
+                <button onclick="generarCodigos()" class="px-4 py-2.5 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700">Generar códigos</button>
+                <p id="cod-msg" class="text-sm min-h-[1.2rem]"></p>
+                <textarea id="cod-out" rows="6" readonly class="hidden w-full p-3 border-2 border-slate-200 rounded-lg font-mono text-sm bg-slate-50"></textarea>
+            </section>
+
+        </div>
+    </main>
+
+    <script>
+        // MISMA URL del servidor que usa la app
+        const SERVIDOR_URL = "https://script.google.com/macros/s/AKfycbyWasAJKc0fxYDTobc5aCSMAOkiFb_KwjxpdYcm06ovVzbFzGfazoW5pjhCuu07CprZfw/exec";
+
+        let PASS = sessionStorage.getItem('admin_pass') || '';
+        let OPOSICIONES = [];
+
+        async function api(payload) {
+            const resp = await fetch(SERVIDOR_URL, { method:'POST', body: JSON.stringify({ ...payload, pass: PASS }) });
+            return await resp.json();
+        }
+
+        async function login() {
+            const msg = document.getElementById('login-msg');
+            PASS = document.getElementById('pass-input').value;
+            msg.textContent = 'Comprobando…'; msg.className = 'text-sm text-slate-500 min-h-[1.2rem]';
+            try {
+                const data = await api({ action:'admin_estado' });
+                if (data.ok) {
+                    sessionStorage.setItem('admin_pass', PASS);
+                    document.getElementById('login-section').classList.add('hidden');
+                    document.getElementById('panel').classList.remove('hidden');
+                    document.getElementById('logout-btn').classList.remove('hidden');
+                    pintarEstado(data.oposiciones);
+                    msg.textContent = '';
+                } else {
+                    msg.textContent = data.error || 'No autorizado.'; msg.className = 'text-sm text-red-600 min-h-[1.2rem]';
+                }
+            } catch (e) {
+                msg.textContent = 'No se pudo conectar con el servidor.'; msg.className = 'text-sm text-red-600 min-h-[1.2rem]';
+            }
+        }
+
+        function logout() {
+            sessionStorage.removeItem('admin_pass'); PASS = '';
+            location.reload();
+        }
+
+        async function cargarEstado() {
+            const data = await api({ action:'admin_estado' });
+            if (data.ok) pintarEstado(data.oposiciones);
+        }
+
+        function pintarEstado(ops) {
+            OPOSICIONES = ops || [];
+            // tabla
+            const cont = document.getElementById('ops-table');
+            if (!OPOSICIONES.length) { cont.innerHTML = '<p class="text-slate-500">No hay oposiciones todavía.</p>'; }
+            else {
+                let h = '<div class="overflow-x-auto"><table class="w-full text-left"><thead><tr class="text-xs text-slate-400 border-b">'
+                      + '<th class="py-1 pr-2">Oposición</th><th class="py-1 px-2">id</th><th class="py-1 px-2 text-center">Preguntas</th><th class="py-1 pl-2 text-center">Códigos (usados)</th></tr></thead><tbody>';
+                OPOSICIONES.forEach(o => {
+                    h += `<tr class="border-b border-slate-50">
+                        <td class="py-1.5 pr-2 font-semibold">${esc(o.nombre)}</td>
+                        <td class="py-1.5 px-2 font-mono text-xs text-slate-500">${esc(o.id)}</td>
+                        <td class="py-1.5 px-2 text-center">${o.preguntas}</td>
+                        <td class="py-1.5 pl-2 text-center">${o.codigos} <span class="text-slate-400">(${o.codigosUsados})</span></td>
+                    </tr>`;
+                });
+                h += '</tbody></table></div>';
+                cont.innerHTML = h;
+            }
+            // selects
+            const opc = OPOSICIONES.map(o => `<option value="${esc(o.id)}">${esc(o.nombre)}</option>`).join('');
+            document.getElementById('up-op').innerHTML = opc || '<option value="">(crea una oposición primero)</option>';
+            document.getElementById('cod-op').innerHTML = opc || '<option value="">(crea una oposición primero)</option>';
+        }
+
+        function sugerirId() {
+            const n = document.getElementById('new-op-nombre').value;
+            const id = n.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+                        .replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+            document.getElementById('new-op-id').value = id;
+        }
+
+        async function crearOposicion() {
+            const msg = document.getElementById('crear-msg');
+            const id = document.getElementById('new-op-id').value.trim();
+            const nombre = document.getElementById('new-op-nombre').value.trim();
+            if (!id || !nombre) { msg.textContent='Pon nombre e identificador.'; msg.className='text-sm text-red-600'; return; }
+            msg.textContent = 'Creando…'; msg.className='text-sm text-slate-500';
+            const data = await api({ action:'admin_crear_oposicion', id, nombre });
+            if (data.ok) {
+                msg.textContent = `✅ Creada: ${data.nombre}`; msg.className='text-sm text-green-600';
+                document.getElementById('new-op-nombre').value=''; document.getElementById('new-op-id').value='';
+                cargarEstado();
+            } else { msg.textContent = data.error; msg.className='text-sm text-red-600'; }
+        }
+
+        // ---- Parser de preguntas pegadas ----
+        function parsearPreguntas(texto) {
+            const bloques = texto.replace(/\r/g,'').split(/\n\s*\n/);
+            const preguntas = [], errores = [];
+            let temaActual = '';
+            bloques.forEach((bloque, bi) => {
+                let lineas = bloque.split('\n').map(l => l.trim()).filter(l => l.length);
+                // extraer TEMA:
+                lineas = lineas.filter(l => {
+                    const m = l.match(/^tema\s*:\s*(.+)$/i);
+                    if (m) { temaActual = m[1].trim(); return false; }
+                    return true;
+                });
+                if (lineas.length === 0) return; // solo era un TEMA:
+                if (lineas.length < 3) { errores.push(`Bloque ${bi+1}: muy pocas líneas (pregunta + respuestas).`); return; }
+                const pregunta = lineas[0];
+                const opcLineas = lineas.slice(1, 5); // hasta 4 respuestas
+                let correcta = '';
+                const letras = ['a','b','c','d'];
+                const opciones = {};
+                opcLineas.forEach((l, i) => {
+                    const esCorrecta = /^\*/.test(l) || /\*\s*$/.test(l);
+                    let limpio = l.replace(/^\*\s*/,'').replace(/\s*\*\s*$/,'');
+                    limpio = limpio.replace(/^[a-dA-D][\)\.\-]\s+/,'').trim(); // quita "a) " si lo trae
+                    opciones[letras[i]] = limpio;
+                    if (esCorrecta) correcta = letras[i];
+                });
+                if (opcLineas.length !== 4) errores.push(`«${pregunta.slice(0,40)}…»: tiene ${opcLineas.length} respuestas (deben ser 4).`);
+                if (!correcta) errores.push(`«${pregunta.slice(0,40)}…»: ninguna respuesta marcada con * (correcta).`);
+                preguntas.push({ tema: temaActual, pregunta, a:opciones.a||'', b:opciones.b||'', c:opciones.c||'', d:opciones.d||'', correcta });
+            });
+            return { preguntas, errores };
+        }
+
+        function previsualizar() {
+            const { preguntas, errores } = parsearPreguntas(document.getElementById('up-text').value);
+            const cont = document.getElementById('up-preview');
+            let h = `<div class="mt-2 p-3 rounded-lg ${errores.length ? 'bg-amber-50' : 'bg-green-50'} text-sm">`;
+            h += `<b>${preguntas.length}</b> preguntas detectadas.`;
+            if (errores.length) {
+                h += `<div class="mt-1 text-amber-700"><b>${errores.length} aviso(s):</b><ul class="list-disc ml-5 mt-1">`
+                   + errores.slice(0,10).map(e=>`<li>${esc(e)}</li>`).join('') + '</ul></div>';
+            } else { h += ' Todo correcto ✅'; }
+            h += '</div>';
+            cont.innerHTML = h;
+            return { preguntas, errores };
+        }
+
+        async function subirPreguntas() {
+            const msg = document.getElementById('up-msg');
+            const oposicion = document.getElementById('up-op').value;
+            if (!oposicion) { msg.textContent='Crea/elige una oposición.'; msg.className='text-sm text-red-600'; return; }
+            const { preguntas, errores } = previsualizar();
+            if (!preguntas.length) { msg.textContent='No hay preguntas que subir.'; msg.className='text-sm text-red-600'; return; }
+            if (errores.length && !confirm(`Hay ${errores.length} aviso(s). ¿Subir igualmente las ${preguntas.length} preguntas?`)) return;
+            msg.textContent='Subiendo…'; msg.className='text-sm text-slate-500';
+            const data = await api({ action:'admin_add_preguntas', oposicion, preguntas });
+            if (data.ok) {
+                msg.textContent = `✅ ${data.añadidas} preguntas añadidas.`; msg.className='text-sm text-green-600';
+                document.getElementById('up-text').value=''; document.getElementById('up-preview').innerHTML='';
+                cargarEstado();
+            } else { msg.textContent = data.error; msg.className='text-sm text-red-600'; }
+        }
+
+        async function generarCodigos() {
+            const msg = document.getElementById('cod-msg');
+            const out = document.getElementById('cod-out');
+            const oposicion = document.getElementById('cod-op').value;
+            const cantidad = parseInt(document.getElementById('cod-num').value)||0;
+            if (!oposicion) { msg.textContent='Elige una oposición.'; msg.className='text-sm text-red-600'; return; }
+            msg.textContent='Generando…'; msg.className='text-sm text-slate-500';
+            const data = await api({ action:'admin_generar_codigos', oposicion, cantidad });
+            if (data.ok) {
+                msg.textContent = `✅ ${data.codigos.length} códigos creados (cópialos):`; msg.className='text-sm text-green-600';
+                out.value = data.codigos.join('\n'); out.classList.remove('hidden');
+                cargarEstado();
+            } else { msg.textContent = data.error; msg.className='text-sm text-red-600'; out.classList.add('hidden'); }
+        }
+
+        function esc(s){ return (s||'').toString().replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+        // auto-login si ya hay contraseña en la sesión
+        if (PASS) { document.getElementById('pass-input').value = PASS; login(); }
+    </script>
+</body>
+</html>
