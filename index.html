@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Test SPEIS</title>
+
+    <!-- ===== PWA (instalar en pantalla del móvil) ===== -->
+    <meta name="theme-color" content="#dc2626">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Test SPEIS">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon-180.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+    <!-- ================================================ -->
+
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style>
+        .correct-option { background-color: #d1fae5; border-color: #10b981; color: #065f46; }
+        .incorrect-option { background-color: #fee2e2; border-color: #ef4444; color: #991b1b; }
+        .selected-option { background-color: #dbeafe; border-color: #3b82f6; color: #1e40af; }
+
+        /* ===== Adaptacion a CUALQUIER pantalla / dispositivo ===== */
+
+        /* La raiz usa la altura REAL del movil (evita huecos por las barras del navegador) */
+        html { height: 100%; }
+        body {
+            min-height: 100vh;          /* respaldo navegadores antiguos */
+            min-height: 100dvh;         /* altura dinamica real en movil */
+            overflow-x: hidden;         /* nunca scroll lateral */
+        }
+
+        /* Nada se desborda a lo ancho */
+        *, *::before, *::after { box-sizing: border-box; }
+        img, svg, video, canvas { max-width: 100%; height: auto; }
+
+        /* El texto largo de las preguntas siempre parte de linea, nunca corta el diseno */
+        body { overflow-wrap: break-word; word-break: break-word; }
+
+        /* Respeta el notch / isla dinamica / barra inferior (iPhone, Android con gestos) */
+        header { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); padding-top: max(0px, env(safe-area-inset-top)); }
+        main {
+            padding-left: max(1rem, env(safe-area-inset-left));
+            padding-right: max(1rem, env(safe-area-inset-right));
+            padding-bottom: max(1rem, env(safe-area-inset-bottom));
+        }
+
+        /* Tamano de fuente base aumentado un par de puntos para mejor lectura */
+        html { font-size: 18px; }
+
+        /* En pantallas muy estrechas (<360px) reduce un poco el texto base */
+        @media (max-width: 360px) {
+            html { font-size: 16px; }
+        }
+
+        /* En pantallas muy grandes lo agranda un poco mas */
+        @media (min-width: 1600px) {
+            html { font-size: 20px; }
+        }
+
+        /* Botones/zonas tactiles comodos en pantalla tactil */
+        button, label[role="button"], .cursor-pointer { touch-action: manipulation; }
+    </style>
+</head>
+<body class="bg-slate-50 font-sans text-slate-800 min-h-screen">
+
+    <!-- ===== PANTALLA DE ACTIVACION POR CODIGO ===== -->
+    <div id="gate" style="position:fixed; inset:0; z-index:100; display:none; align-items:center; justify-content:center; padding:1.5rem;
+         background:linear-gradient(135deg,#dc2626,#d97706);">
+        <div style="width:100%; max-width:420px; background:#fff; border-radius:1rem; padding:1.75rem; box-shadow:0 20px 50px rgba(0,0,0,.3);">
+            <div style="text-align:center; font-size:2.5rem; line-height:1;">🚒</div>
+            <h2 style="text-align:center; font-weight:800; font-size:1.35rem; margin:.5rem 0 .25rem; color:#0f172a;">Test SPEIS</h2>
+            <p style="text-align:center; color:#64748b; font-size:.9rem; margin:0 0 1.25rem;">Introduce tu código de activación para empezar.</p>
+
+            <input id="gate-code" type="text" inputmode="text" autocomplete="off" placeholder="SPEIS-XXXXXX"
+                style="width:100%; text-align:center; letter-spacing:2px; text-transform:uppercase; font-weight:700; font-size:1.1rem;
+                       padding:.85rem; border:2px solid #e2e8f0; border-radius:.75rem; outline:none;">
+
+            <button id="gate-btn" onclick="activar()"
+                style="width:100%; margin-top:1rem; padding:.9rem; border:0; border-radius:.75rem; cursor:pointer;
+                       background:#dc2626; color:#fff; font-weight:700; font-size:1rem;">
+                Activar
+            </button>
+
+            <div style="display:flex; align-items:center; gap:.6rem; margin:1rem 0 .25rem;">
+                <div style="flex:1; height:1px; background:#e2e8f0;"></div>
+                <span style="font-size:.72rem; color:#94a3b8;">o</span>
+                <div style="flex:1; height:1px; background:#e2e8f0;"></div>
+            </div>
+
+            <button id="gate-demo" onclick="probarDemo()"
+                style="width:100%; padding:.8rem; border:2px solid #dc2626; border-radius:.75rem; cursor:pointer;
+                       background:#fff; color:#dc2626; font-weight:700; font-size:.95rem;">
+                Probar demo (10 preguntas)
+            </button>
+
+            <p id="gate-msg" style="text-align:center; min-height:1.2rem; margin:.85rem 0 0; font-size:.85rem; color:#dc2626;"></p>
+            <p style="text-align:center; margin:.75rem 0 0; font-size:.72rem; color:#94a3b8;">Cada código solo funciona en un dispositivo.</p>
+        </div>
+    </div>
+    <!-- ============================================= -->
+
+    <!-- Aviso de MODO DEMO (oculto salvo en demo) -->
+    <div id="demo-banner" style="display:none; background:#fef3c7; color:#92400e; border-bottom:2px solid #f59e0b;
+         padding:.6rem 1rem; text-align:center; font-size:.85rem; font-weight:600;">
+        Estás en <b>modo demo</b> (10 preguntas).
+        <button onclick="abrirActivacion()" style="margin-left:.5rem; background:#dc2626; color:#fff; border:0;
+            border-radius:.5rem; padding:.35rem .7rem; font-weight:700; cursor:pointer; font-size:.8rem;">
+            Activar versión completa
+        </button>
+    </div>
+
+    <header class="bg-gradient-to-r from-red-600 to-amber-600 text-white shadow-md p-4 sticky top-0 z-50">
+        <div class="max-w-6xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-2">
+            <h1 class="text-xl font-bold tracking-wide flex items-center gap-2">
+                🚒 <span>Panel de Control de Test - SPEIS</span>
+            </h1>
+            <div class="flex items-center gap-4 text-xs sm:text-sm bg-black/20 px-3 py-1.5 rounded-lg">
+                <div>Respondidas: <span id="global-progress" class="font-bold">0</span></div>
+                <div class="h-4 w-px bg-white/30"></div>
+                <div>Banco de Fallos: <span id="global-failures" class="font-bold text-amber-200">0</span></div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto p-4 sm:p-6 space-y-6">
+
+        <!-- ===== PROGRESO Y ESTADISTICAS (nota sobre 10) ===== -->
+        <section id="stats-panel" class="bg-white rounded-xl shadow-sm p-5 border border-slate-200 space-y-4">
+            <div class="flex items-center justify-between flex-wrap gap-2">
+                <h2 class="text-base font-bold text-slate-700 flex items-center gap-2">📊 <span>Tu progreso</span></h2>
+                <span id="progress-label" class="text-sm font-semibold text-slate-500">0 / 0 respondidas (0%)</span>
+            </div>
+            <div class="w-full h-4 bg-slate-100 rounded-full overflow-hidden">
+                <div id="progress-bar" class="h-full bg-gradient-to-r from-red-600 to-amber-500 rounded-full transition-all duration-500" style="width:0%"></div>
+            </div>
+            <div class="grid grid-cols-3 gap-3 text-center pt-1">
+                <div class="bg-slate-50 rounded-xl p-3 border border-slate-100">
+                    <div id="stat-nota" class="text-2xl font-extrabold text-slate-800">–</div>
+                    <div class="text-xs text-slate-500 mt-0.5">Nota media /10</div>
+                </div>
+                <div class="bg-green-50 rounded-xl p-3 border border-green-100">
+                    <div id="stat-aciertos" class="text-2xl font-extrabold text-green-700">0</div>
+                    <div class="text-xs text-slate-500 mt-0.5">Aciertos</div>
+                </div>
+                <div class="bg-amber-50 rounded-xl p-3 border border-amber-100">
+                    <div id="stat-fallos" class="text-2xl font-extrabold text-amber-700">0</div>
+                    <div class="text-xs text-slate-500 mt-0.5">Fallos pendientes</div>
+                </div>
+            </div>
+        </section>
+
+        <section id="config-panel" class="bg-white rounded-xl shadow-sm p-5 border border-slate-200 grid grid-cols-1 md:grid-cols-3 gap-6">
+            
+            <div class="md:col-span-1 space-y-3">
+                <h2 class="text-base font-bold text-slate-700 flex items-center gap-2">
+                    📁 <span>1. Elige el tema</span>
+                </h2>
+                <div class="flex items-center gap-3 text-xs text-slate-400">
+                    <span class="flex items-center gap-1"><span class="inline-block w-2.5 h-2.5 rounded-full bg-slate-300"></span>sin empezar</span>
+                    <span class="flex items-center gap-1"><span class="inline-block w-2.5 h-2.5 rounded-full bg-amber-400"></span>a medias</span>
+                    <span class="flex items-center gap-1"><span class="inline-block w-2.5 h-2.5 rounded-full bg-green-500"></span>completo</span>
+                </div>
+                <div class="flex items-center justify-between text-xs text-blue-600 font-medium">
+                    <button onclick="toggleAllBlocks(true)" class="hover:underline cursor-pointer">Seleccionar todos</button>
+                    <button onclick="toggleAllBlocks(false)" class="hover:underline cursor-pointer">Desmarcar todos</button>
+                </div>
+                <div id="blocks-container" class="space-y-1 max-h-80 overflow-y-auto pr-1 text-sm border-t border-slate-100 pt-2">
+                    </div>
+            </div>
+
+            <div class="md:col-span-2 space-y-4 flex flex-col justify-between">
+                <div>
+                    <h2 class="text-base font-bold text-slate-700 flex items-center gap-2 mb-3">
+                        ⚡ <span>2. Seleccionar Modalidad y Cantidad</span>
+                    </h2>
+                    
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <label class="border-2 border-slate-200 rounded-xl p-3 flex flex-col justify-between cursor-pointer hover:border-red-500 transition-colors bg-slate-50 relative">
+                            <input type="radio" name="test-mode" value="tema" checked class="absolute top-3 right-3 accent-red-600">
+                            <div class="pr-6">
+                                <span class="block font-bold text-sm text-slate-800">Tema completo</span>
+                                <span class="text-xs text-slate-500 block mt-1">Hace todas las preguntas del tema o temas que elijas.</span>
+                            </div>
+                        </label>
+
+                        <label class="border-2 border-slate-200 rounded-xl p-3 flex flex-col justify-between cursor-pointer hover:border-red-500 transition-colors bg-slate-50 relative">
+                            <input type="radio" name="test-mode" value="random" class="absolute top-3 right-3 accent-red-600">
+                            <div class="pr-6">
+                                <span class="block font-bold text-sm text-slate-800">Test Aleatorio</span>
+                                <span class="text-xs text-slate-500 block mt-1">Preguntas cruzadas al azar según el volumen que escojas.</span>
+                                <select id="random-size" class="mt-2 text-xs border border-slate-300 rounded px-1.5 py-0.5 bg-white w-full">
+                                    <option value="10">10 preguntas</option>
+                                    <option value="20">20 preguntas</option>
+                                    <option value="30">30 preguntas</option>
+                                </select>
+                            </div>
+                        </label>
+
+                        <label id="mode-failures-label" class="border-2 border-slate-200 rounded-xl p-3 flex flex-col justify-between cursor-pointer hover:border-amber-500 transition-colors bg-slate-50 relative opacity-60">
+                            <input type="radio" name="test-mode" value="failures" id="radio-failures" disabled class="absolute top-3 right-3 accent-amber-600">
+                            <div class="pr-6">
+                                <span class="block font-bold text-sm text-slate-800">Test de Errores</span>
+                                <span class="text-xs text-slate-500 block mt-1">Hacer test exclusivo con las preguntas falladas para repasarlas.</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="pt-4 border-t border-slate-100 flex flex-col sm:flex-row gap-3 justify-end items-center">
+                    <button onclick="resetStats()" class="text-xs text-red-500 hover:text-red-700 font-medium order-2 sm:order-1 cursor-pointer">
+                        🔄 Reiniciar estadísticas e historial
+                    </button>
+                    <button onclick="generateTest()" class="w-full sm:w-auto bg-gradient-to-r from-red-600 to-amber-600 text-white font-bold px-6 py-2.5 rounded-xl shadow-md hover:brightness-110 transition-all cursor-pointer text-center order-1 sm:order-2">
+                        🚀 Generar Test
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <section id="test-panel" class="hidden space-y-6">
+            <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex flex-col sm:flex-row justify-between items-center gap-3">
+                <div>
+                    <span id="test-title-badge" class="bg-red-100 text-red-800 font-bold text-xs uppercase px-2.5 py-1 rounded-full">Examen</span>
+                    <h3 class="text-sm text-slate-500 mt-1" id="test-info-text">Responde las preguntas</h3>
+                </div>
+                <div class="flex gap-2 w-full sm:w-auto">
+                    <button onclick="exitTest()" class="w-1/2 sm:w-auto px-4 py-2 text-sm font-semibold border border-slate-300 rounded-xl hover:bg-slate-50 cursor-pointer text-center">
+                        📁 Menú Principal
+                    </button>
+                    <button id="btn-submit-test" onclick="gradeTest()" class="w-1/2 sm:w-auto px-5 py-2 text-sm font-bold bg-green-600 text-white rounded-xl hover:bg-green-700 shadow transition-colors cursor-pointer text-center">
+                        ✅ Corregir Test
+                    </button>
+                </div>
+            </div>
+
+            <div id="questions-container" class="space-y-4"></div>
+            
+            <div class="flex justify-end pt-2">
+                <button id="btn-submit-test-bottom" onclick="gradeTest()" class="w-full sm:w-auto px-8 py-3 text-base font-bold bg-green-600 text-white rounded-xl hover:bg-green-700 shadow-md transition-all cursor-pointer text-center">
+                    ✅ Finalizar y Corregir Todo
+                </button>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        // BANCO COMPLETO DE PREGUNTAS EXTRAÍDO DIRECTAMENTE DEL DOCUMENTO PDF
+        let bancoPreguntas = []; // Se rellena tras activar con un codigo valido
+
+        // VARIABLES LOGÍSTICAS DE PERSISTENCIA
+        let fallosIds = JSON.parse(localStorage.getItem('bomber_fallos_ids')) || [];
+        let respondidasIds = JSON.parse(localStorage.getItem('bomber_respondidas_ids')) || [];
+        let testActualPreguntas = [];
+        let respuestasUsuario = {};
+        let ordenConsecutivoIndices = JSON.parse(localStorage.getItem('bomber_orden_indices')) || {};
+
+        // El arranque real ocurre SOLO despues de activar con un codigo valido
+        function iniciarApp() {
+            renderSyllabusBlocks();
+            updateGlobalCounters();
+        }
+
+        /* ============================================================
+           SISTEMA DE ACTIVACION POR CODIGO + CONTENIDO DESDE SERVIDOR
+           ============================================================ */
+
+        // 1) PEGA AQUI la URL que te da Google al publicar el Apps Script
+        const SERVIDOR_URL = "https://script.google.com/macros/s/AKfycbysA1q3WBvxun9oT2KcZY2R0I2FlMGJ2igeFaTlTzvrEbZ8c1WjugWaT4iAQGBx-IXb8A/exec";
+
+        // 10 preguntas FIJAS de la demo (van dentro de la app, sin servidor)
+        const PREGUNTAS_DEMO = [{"id":1,"tema":"Tema 16: DL 1/2017","pregunta":"SEGÚN EL DECRETO LEGISLATIVO 1/2017 DE LA LEY DE GESTIÓN DE EMERGENCIAS EN SU ARTÍCULO 2, ¿CUÁLES SON LOS PRINCIPIOS A LOS QUE SE SOMETEN LAS RELACIONES DE LAS ADMINISTRACIONES PÚBLICAS VASCAS EN LA GESTIÓN DE EMERGENCIAS?","opciones":{"a":"Coordinación, colaboración e independencia","b":"Coordinación, colaboración, solidaridad y lealtad institucional","c":"Jerarquía estricta, opacidad y mando único","d":"Subordinación, solidaridad y lealtad institucional"},"correcta":"b"},{"id":8,"tema":"Tema 17: Ley 12/2023 SPEIS","pregunta":"SEGÚN LA LEY 12/2023 DE LOS SERVICIOS DE PREVENCIÓN Y EXTINCIÓN DE INCENDIOS Y SALVAMENTO, EL PERSONAL FUNCIONARIO DE LOS SERVICIOS TENDRÁ LA CONSIDERACIÓN DE AGENTE DE LA AUTORIDAD:","opciones":{"a":"Cuando esté de servicio o cuando, estando libre de servicio, intervenga en cualquier tipo de siniestro o situación de riesgo inminente, siempre que acredite previamente su condición","b":"Cuando esté de servicio o cuando, estando libre de servicio, intervenga en cualquier tipo de siniestro o situación de riesgo inminente, sin que tenga que acreditar previamente su condición","c":"Nunca pueden ser considerados agentes de la autoridad","d":"Cuando esté exclusivamente de servicio e intervenga en cualquier tipo de siniestro, sin necesidad de acreditarlo"},"correcta":"a"},{"id":16,"tema":"Tema 18: Decreto 153/1997 LABI","pregunta":"SEGÚN EL DECRETO 153/1997 POR EL QUE SE APRUEBA EL PLAN DE PROTECCIÓN CIVIL DE EUSKADI (LABI), LOS RIESGOS PROVOCADOS O DERIVADOS DE LAS ACCIONES O ACTIVIDADES HUMANAS SON UN RIESGO DE TIPO:","opciones":{"a":"Antrópico","b":"Tecnológico","c":"Natural","d":"Ambiental"},"correcta":"a"},{"id":24,"tema":"Tema 19: DF 90/2022 Bizkaia","pregunta":"SEGÚN EL DECRETO FORAL DE BIZKAIA 90/2022 REGULADOR DEL PLAN FORAL DE EMERGENCIAS, EL RIESGO SE EVALÚA A PARTIR DE LOS PARÁMETRES DE:","opciones":{"a":"Únicamente ocurrencia","b":"Ocurrencia y probabilidad","c":"Probabilidad y severidad","d":"Ninguna de las anteriores es correcta"},"correcta":"c"},{"id":33,"tema":"Tema 20: D 277/2010 Autoprotección","pregunta":"SEGÚN EL DECRETO 277/2010, REMITIR AL REGISTRO GENERAL DE PLANES DE AUTOPROTECCIÓN DE EUSKADI LOS DATOS PREVISTOS Y MANTENERLOS ACTUALIZADOS ES UNA OBLIGACIÓN DE:","opciones":{"a":"Administración General de la Comunidad Autónoma de Euskadi competente en materia de atención de emergencias","b":"Persona titular de la actividad","c":"La Comisión de Protección Civil de Euskadi","d":"Ministerio de Industria y Turismo"},"correcta":"b"},{"id":41,"tema":"Tema 21: Ley 31/1995 LPRL","pregunta":"SEGÚN LA LEY 31/1995 DE PREVENCIÓN DE RIESGOS LABORALES, CUALQUIER EQUIPO DESTINADO A SER LLEVADO O SUJETADO POR EL TRABAJADOR PARA QUE LE PROTEJA SE ENTENDERÁ POR:","opciones":{"a":"Equipo de Trabajo","b":"Equipo de Protección Individual","c":"Equipo de Prevención","d":"Equipo de Respiración Autónomo"},"correcta":"b"},{"id":50,"tema":"Tema 22: RD 513/2017 RIPCI","pregunta":"SEGÚN EL REAL DECRETO 513/2017 (RIPCI), LA INSTALACIÓN DE LOS EQUIPOS REQUERIRÁ LA PRESENTACIÓN DE UN PROYECTO O DOCUMENTACIÓN TÉCNICA ANTE LOS SERVICIOS EN MATERIA DE:","opciones":{"a":"Salud del Gobierno Vasco","b":"Seguridad del Gobierno Vasco","c":"Industria de la Comunidad Autónoma","d":"Protección Civil"},"correcta":"c"},{"id":58,"tema":"Tema 23: CTE SI","pregunta":"SEGÚN LA TABLA 1.1 DE LA SECCIÓN SI4, ¿CUÁNDO ES OBLIGATORIA LA INSTALACIÓN DE UN SISTEMA DE BIE EN UN USO ADMINISTRATIVO?","opciones":{"a":"En todo caso, independientemente de la superficie del edificio","b":"Cuando la altura de evacuación sea superior a 28 m","c":"Cuando la superficie construida sea mayor de 2.000 m2","d":"Cuando el edificio disponga de más de dos plantas sobre rasante"},"correcta":"c"},{"id":69,"tema":"Tema 24: RD 164/2025 RSCIEI","pregunta":"SEGÚN EL REAL DECRETO 164/2025 POR EL QUE SE APRUEBA EL REGLAMENTO DE SEGURIDAD CONTRA INCENDIOS EN LOS ESTABLECIMIENTOS INDUSTRIALES, ¿A CUÁL DE LAS SIGUIENTES ACTIVIDADES SE APLICA ESTE REGLAMENTO?","opciones":{"a":"Las actividades agrarias y de ganadería","b":"Los talleres de reparación de vehículos","c":"Las de extracción de minerales","d":"Las instalaciones para usos militares"},"correcta":"b"},{"id":78,"tema":"Tema 25/26: Tácticas","pregunta":"SEGÚN LAS TÁCTICAS OPERATIVAS DEL SISTEMA VASCO DE ATENCIÓN DE EMERGENCIAS, LA COMUNICACIÓN DE LA DESAPARICIÓN DE UNA PERSONA CUYA UBICACIÓN ES DESCONOCIDA ES LA TÁCTICA OPERATIVA:","opciones":{"a":"TG3","b":"SG1","c":"M0","d":"Lurra"},"correcta":"c"}];
+
+        // Identificador unico de este dispositivo (se crea una vez)
+        function getDeviceId() {
+            let id = localStorage.getItem('speis_device');
+            if (!id) {
+                id = 'dev-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+                localStorage.setItem('speis_device', id);
+            }
+            return id;
+        }
+
+        // Arranque: si ya esta activado, carga las preguntas guardadas; si no, pide codigo
+        function arrancarSistema() {
+            const guardadas = localStorage.getItem('speis_preguntas');
+            const activado = localStorage.getItem('speis_activado');
+            if (activado === 'si' && guardadas) {
+                try {
+                    bancoPreguntas = JSON.parse(guardadas);
+                    document.getElementById('gate').style.display = 'none';
+                    iniciarApp();
+                    return;
+                } catch (e) { /* si algo falla, vuelve a pedir codigo */ }
+            }
+            document.getElementById('gate').style.display = 'flex';
+        }
+
+        // Pulsar "Activar"
+        async function activar() {
+            const input = document.getElementById('gate-code');
+            const btn = document.getElementById('gate-btn');
+            const msg = document.getElementById('gate-msg');
+            const codigo = (input.value || '').trim().toUpperCase();
+
+            if (!codigo) { msg.textContent = 'Escribe tu código.'; return; }
+            if (SERVIDOR_URL.indexOf('http') !== 0) {
+                msg.textContent = 'La app aún no tiene configurado el servidor.';
+                return;
+            }
+
+            btn.disabled = true; btn.textContent = 'Comprobando...'; msg.textContent = '';
+
+            try {
+                const url = SERVIDOR_URL + '?codigo=' + encodeURIComponent(codigo)
+                          + '&device=' + encodeURIComponent(getDeviceId())
+                          + '&t=' + Date.now();
+                const resp = await fetch(url);
+                const data = await resp.json();
+
+                if (data.ok && Array.isArray(data.preguntas)) {
+                    bancoPreguntas = data.preguntas;
+                    // Guardamos para que funcione sin conexion a partir de ahora
+                    localStorage.setItem('speis_preguntas', JSON.stringify(data.preguntas));
+                    localStorage.setItem('speis_activado', 'si');
+                    localStorage.setItem('speis_codigo', codigo);
+                    document.getElementById('gate').style.display = 'none';
+                    iniciarApp();
+                } else {
+                    msg.style.color = '#dc2626';
+                    msg.textContent = data.error || 'Código no válido.';
+                    btn.disabled = false; btn.textContent = 'Activar';
+                }
+            } catch (e) {
+                msg.style.color = '#dc2626';
+                msg.textContent = 'No se pudo conectar. Revisa tu conexión a internet.';
+                btn.disabled = false; btn.textContent = 'Activar';
+            }
+        }
+
+        // Pulsar "Probar demo": carga las 10 preguntas fijas que van dentro de la app
+        function probarDemo() {
+            bancoPreguntas = PREGUNTAS_DEMO.slice();
+            // La demo NO se guarda como activación: al reabrir vuelve a pedir código
+            document.getElementById('gate').style.display = 'none';
+            document.getElementById('demo-banner').style.display = 'block';
+            iniciarApp();
+        }
+
+        // Volver a la pantalla de código desde la demo
+        function abrirActivacion() {
+            document.getElementById('demo-banner').style.display = 'none';
+            const btn = document.getElementById('gate-demo');
+            btn.disabled = false; btn.textContent = 'Probar demo (10 preguntas)';
+            document.getElementById('gate').style.display = 'flex';
+        }
+
+        // Permitir activar pulsando Enter
+        window.addEventListener('load', function () {
+            const inp = document.getElementById('gate-code');
+            if (inp) inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') activar(); });
+            arrancarSistema();
+        });
+
+        // RENDERIZAR FILTROS DE TEMAS
+        function renderSyllabusBlocks() {
+            const container = document.getElementById('blocks-container');
+            const temas = [...new Set(bancoPreguntas.map(p => p.tema))].sort();
+
+            // Preservar la seleccion actual de checkboxes (si existe)
+            const previas = {};
+            let habiaPrevias = false;
+            document.querySelectorAll('.block-checkbox').forEach(cb => { previas[cb.value] = cb.checked; habiaPrevias = true; });
+
+            container.innerHTML = '';
+            temas.forEach((tema, idx) => {
+                const preguntasTema = bancoPreguntas.filter(p => p.tema === tema);
+                const totalTema = preguntasTema.length;
+                const hechasTema = preguntasTema.filter(p => respondidasIds.includes(p.id)).length;
+
+                // Estado del semaforo
+                let color = 'bg-slate-300';            // sin empezar
+                if (hechasTema > 0 && hechasTema < totalTema) color = 'bg-amber-400'; // a medias
+                if (hechasTema === totalTema) color = 'bg-green-500';                 // completo
+
+                const marcado = habiaPrevias ? (previas[tema] ?? false) : true;
+
+                const div = document.createElement('div');
+                div.className = "flex items-center gap-2 py-1 px-1 rounded-lg hover:bg-slate-50";
+                div.innerHTML = `
+                    <input type="checkbox" id="block-${idx}" value="${tema}" ${marcado ? 'checked' : ''} class="accent-red-600 block-checkbox shrink-0">
+                    <span class="inline-block w-3 h-3 rounded-full ${color} shrink-0" title="${hechasTema} de ${totalTema} hechas"></span>
+                    <label for="block-${idx}" class="cursor-pointer select-none text-slate-700 flex-1 flex items-center justify-between gap-2">
+                        <span class="font-semibold">${tema}</span>
+                        <span class="text-xs ${hechasTema===totalTema ? 'text-green-600 font-bold' : 'text-slate-400'} shrink-0">${hechasTema}/${totalTema}</span>
+                    </label>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function toggleAllBlocks(checked) {
+            document.querySelectorAll('.block-checkbox').forEach(cb => cb.checked = checked);
+        }
+
+        // CONTROLADORES DE CONTADORES GLOBALES
+        function updateGlobalCounters() {
+            document.getElementById('global-progress').innerText = `${respondidasIds.length} / ${bancoPreguntas.length}`;
+            document.getElementById('global-failures').innerText = fallosIds.length;
+
+            // Barra de progreso + estadisticas (nota sobre 10)
+            const total = bancoPreguntas.length || 1;
+            const hechas = respondidasIds.length;
+            const aciertos = respondidasIds.filter(id => !fallosIds.includes(id)).length;
+            const pct = Math.round((hechas / total) * 100);
+            const nota = hechas > 0 ? (aciertos / hechas * 10) : null;
+
+            const bar = document.getElementById('progress-bar');
+            if (bar) bar.style.width = pct + '%';
+            const lbl = document.getElementById('progress-label');
+            if (lbl) lbl.innerText = `${hechas} / ${total} respondidas (${pct}%)`;
+            const elNota = document.getElementById('stat-nota');
+            if (elNota) elNota.innerText = nota === null ? '–' : nota.toFixed(1);
+            const elAc = document.getElementById('stat-aciertos');
+            if (elAc) elAc.innerText = aciertos;
+            const elFa = document.getElementById('stat-fallos');
+            if (elFa) elFa.innerText = fallosIds.length;
+
+            // Refrescar semaforos de cada tema
+            renderSyllabusBlocks();
+
+            const btnFailuresLabel = document.getElementById('mode-failures-label');
+            const radioFailures = document.getElementById('radio-failures');
+            if(fallosIds.length > 0) {
+                btnFailuresLabel.classList.remove('opacity-60');
+                radioFailures.disabled = false;
+            } else {
+                btnFailuresLabel.classList.add('opacity-60');
+                radioFailures.disabled = true;
+                if(radioFailures.checked) {
+                    document.querySelector('input[name="test-mode"][value="tema"]').checked = true;
+                }
+            }
+        }
+
+        // GENERADOR DE EXAMEN INTERACTIVO
+        function generateTest() {
+            const checkboxes = document.querySelectorAll('.block-checkbox:checked');
+            const temasSeleccionados = Array.from(checkboxes).map(cb => cb.value);
+
+            if(temasSeleccionados.length === 0) {
+                alert("⚠️ Selecciona al menos un bloque temático.");
+                return;
+            }
+
+            let poolBase = bancoPreguntas.filter(p => temasSeleccionados.includes(p.tema));
+
+            if(poolBase.length === 0) {
+                alert("No hay preguntas en los bloques elegidos.");
+                return;
+            }
+
+            const modo = document.querySelector('input[name="test-mode"]:checked').value;
+            testActualPreguntas = [];
+            respuestasUsuario = {};
+
+            if (modo === 'failures') {
+                testActualPreguntas = poolBase.filter(p => fallosIds.includes(p.id));
+                if(testActualPreguntas.length === 0) {
+                    alert("No hay fallos registrados bajo los bloques de temario seleccionados actualmente.");
+                    return;
+                }
+                testActualPreguntas.sort(() => Math.random() - 0.5);
+                document.getElementById('test-info-text').innerText = `Repaso de Fallos acumulados (${testActualPreguntas.length} preguntas)`;
+            } 
+            else if (modo === 'random') {
+                const size = parseInt(document.getElementById('random-size').value) || 10;
+                let aleatorias = [...poolBase].sort(() => Math.random() - 0.5);
+                testActualPreguntas = aleatorias.slice(0, size);
+                document.getElementById('test-info-text').innerText = `Test Aleatorio Dinámico (${testActualPreguntas.length} preguntas al azar)`;
+            } 
+            else if (modo === 'tema') {
+                // Tema(s) completo(s): todas las preguntas de los temas elegidos, en orden
+                testActualPreguntas = [...poolBase].sort((a, b) => a.id - b.id);
+                const nombresTemas = temasSeleccionados.length === 1
+                    ? temasSeleccionados[0]
+                    : `${temasSeleccionados.length} temas`;
+                document.getElementById('test-info-text').innerText = `Tema completo · ${nombresTemas} (${testActualPreguntas.length} preguntas)`;
+            }
+
+            renderTestQuestions();
+            document.getElementById('config-panel').classList.add('hidden');
+            document.getElementById('test-panel').classList.remove('hidden');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // PINTAR LAS PREGUNTAS DEL TEST ACTIVO
+        function renderTestQuestions() {
+            const container = document.getElementById('questions-container');
+            container.innerHTML = '';
+
+            testActualPreguntas.forEach((q, index) => {
+                const card = document.createElement('div');
+                card.id = `q-card-${q.id}`;
+                card.className = "bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-3 transition-all";
+                
+                card.innerHTML = `
+                    <div class="flex flex-wrap justify-between items-center gap-2 border-b border-slate-100 pb-2 text-xs">
+                        <span class="font-bold text-slate-400 uppercase tracking-wider">Pregunta ${index + 1} (Ref ID: #${q.id})</span>
+                        <span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-medium">${q.tema}</span>
+                    </div>
+                    <p class="font-bold text-slate-800 text-sm sm:text-base leading-snug pt-1">${q.pregunta}</p>
+                    <div id="options-group-${q.id}" class="space-y-2 pt-2"></div>
+                `;
+
+                container.appendChild(card);
+
+                const optionsGroup = document.getElementById(`options-group-${q.id}`);
+                Object.keys(q.opciones).forEach(letra => {
+                    const btn = document.createElement('button');
+                    btn.type = "button";
+                    btn.id = `opt-${q.id}-${letra}`;
+                    btn.className = "w-full text-left text-sm p-3 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors flex items-center gap-3 cursor-pointer";
+                    btn.onclick = () => selectOption(q.id, letra);
+                    btn.innerHTML = `
+                        <span class="h-6 w-6 shrink-0 flex items-center justify-center font-bold border border-slate-300 bg-slate-100 rounded text-slate-600 text-xs uppercase">${letra}</span>
+                        <span class="text-slate-700 leading-tight font-medium">${q.opciones[letra]}</span>
+                    `;
+                    optionsGroup.appendChild(btn);
+                });
+            });
+            
+            document.getElementById('btn-submit-test').classList.remove('hidden');
+            document.getElementById('btn-submit-test-bottom').classList.remove('hidden');
+        }
+
+        function selectOption(preguntaId, letra) {
+            if(document.getElementById('btn-submit-test').classList.contains('hidden')) return;
+
+            const q = testActualPreguntas.find(p => p.id === preguntaId);
+            Object.keys(q.opciones).forEach(l => {
+                const el = document.getElementById(`opt-${preguntaId}-${l}`);
+                if(el) el.classList.remove('selected-option');
+            });
+
+            document.getElementById(`opt-${preguntaId}-${letra}`).classList.add('selected-option');
+            respuestasUsuario[preguntaId] = letra;
+        }
+
+        // CORRECCIÓN INTEGRADORA CON LOCALSTORAGE
+        function gradeTest() {
+            let aciertos = 0;
+            let fallosTest = 0;
+            let noRespondidas = 0;
+
+            testActualPreguntas.forEach(q => {
+                const elegida = respuestasUsuario[q.id];
+                const card = document.getElementById(`q-card-${q.id}`);
+                
+                if(!respondidasIds.includes(q.id)) {
+                    respondidasIds.push(q.id);
+                }
+
+                Object.keys(q.opciones).forEach(l => {
+                    const el = document.getElementById(`opt-${q.id}-${l}`);
+                    if(!el) return;
+                    el.classList.remove('selected-option');
+
+                    if (l === q.correcta) el.classList.add('correct-option');
+                    if (elegida === l && elegida !== q.correcta) el.classList.add('incorrect-option');
+                });
+
+                if (!elegida) {
+                    noRespondidas++;
+                    card.classList.add('border-amber-300', 'bg-amber-50/20');
+                    if(!fallosIds.includes(q.id)) fallosIds.push(q.id);
+                } else if (elegida === q.correcta) {
+                    aciertos++;
+                    card.classList.add('border-green-300', 'bg-green-50/10');
+                    fallosIds = fallosIds.filter(id => id !== q.id);
+                } else {
+                    fallosTest++;
+                    card.classList.add('border-red-300', 'bg-red-50/10');
+                    if(!fallosIds.includes(q.id)) fallosIds.push(q.id);
+                }
+            });
+
+            localStorage.setItem('bomber_fallos_ids', JSON.stringify(fallosIds));
+            localStorage.setItem('bomber_respondidas_ids', JSON.stringify(respondidasIds));
+            updateGlobalCounters();
+
+            document.getElementById('btn-submit-test').classList.add('hidden');
+            document.getElementById('btn-submit-test-bottom').classList.add('hidden');
+
+            const totalTest = testActualPreguntas.length || 1;
+            const notaTest = (aciertos / totalTest * 10).toFixed(1);
+            alert(`📊 RESUMEN DEL TEST:\n\n📝 Nota: ${notaTest} / 10\n\n✔️ Correctas: ${aciertos}\n❌ Incorrectas: ${fallosTest}\n⚪ En blanco: ${noRespondidas}`);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function exitTest() {
+            if(!document.getElementById('btn-submit-test').classList.contains('hidden')) {
+                if(!confirm("¿Deseas salir del test activo? Se perderán las respuestas no corregidas.")) return;
+            }
+            document.getElementById('test-panel').classList.add('hidden');
+            document.getElementById('config-panel').classList.remove('hidden');
+            updateGlobalCounters();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function resetStats() {
+            if(confirm("⚠️ ¿Quieres borrar por completo las estadísticas, el banco de fallos y el progreso actual?")) {
+                localStorage.removeItem('bomber_fallos_ids');
+                localStorage.removeItem('bomber_respondidas_ids');
+                localStorage.removeItem('bomber_orden_indices');
+                fallosIds = [];
+                respondidasIds = [];
+                ordenConsecutivoIndices = {};
+                updateGlobalCounters();
+                renderSyllabusBlocks();
+                alert("Historial limpio.");
+            }
+        }
+    </script>
+
+    <!-- ===== Registro del Service Worker (PWA) ===== -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function () {
+                navigator.serviceWorker.register('sw.js').catch(function (err) {
+                    console.log('SW no registrado:', err);
+                });
+            });
+        }
+    </script>
+</body>
+</html>
